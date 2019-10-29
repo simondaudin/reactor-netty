@@ -56,7 +56,17 @@ public interface HttpClientResponse extends HttpInfos {
 	HttpHeaders responseHeaders();
 
 	/**
+	 * @return the resolved HTTP Response Status with a default reason phrase
+	 * that corresponds to this code.
+	 */
+	default HttpResponseStatus status() {
+		return status(false);
+	}
+
+	/**
+	 * @param withReasonPhrase specifies whether the returned {@link HttpResponseStatus}
+	 *                         will contain the default reason phrase or the original reason phrase
 	 * @return the resolved HTTP Response Status
 	 */
-	HttpResponseStatus status();
+	HttpResponseStatus status(boolean withReasonPhrase);
 }
