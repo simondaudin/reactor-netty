@@ -306,6 +306,15 @@ final class HttpTrafficHandler extends ChannelDuplexHandler
 			}
 			return;
 		}
+		if (persistentConnection && pendingResponses == 0) {
+			if (HttpServerOperations.log.isDebugEnabled()) {
+				HttpServerOperations.log.debug(format(ctx.channel(), "Dropped HTTP content, " +
+						"since response has been sent already: {}"), msg);
+			}
+			ReferenceCountUtil.release(msg);
+			promise.setSuccess();
+			return;
+		}
 		//"FutureReturnValueIgnored" this is deliberate
 		ctx.write(msg, promise);
 	}
