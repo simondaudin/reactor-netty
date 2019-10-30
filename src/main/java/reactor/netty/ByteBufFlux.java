@@ -28,6 +28,7 @@ import java.util.function.Function;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.buffer.ByteBufHolder;
+import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.util.IllegalReferenceCountException;
 import org.reactivestreams.Publisher;
@@ -259,23 +260,31 @@ public class ByteBufFlux extends FluxOperator<ByteBuf, ByteBuf> {
 	 * @return {@link ByteBufMono} of aggregated {@link ByteBuf}
 	 */
 	public final ByteBufMono aggregate() {
-		return Mono.using(alloc::compositeBuffer,
-				b -> this.reduce(b,
-				                 (prev, next) -> {
-				                     if (prev.refCnt() > 0) {
-				                         return prev.addComponent(true, next.retain());
-				                     }
-				                     else {
-				                         return prev;
-				                     }
-				                 })
-				         .filter(ByteBuf::isReadable),
-				b -> {
-				    if (b.refCnt() > 0) {
-				        b.release();
-				    }
-				})
-				.as(ByteBufMono::maybeFuse);
+		return Mono.defer(() -> {
+		               CompositeByteBuf output = alloc.compositeBuffer();
+		               return doOnNext(ByteBuf::retain)
+		                       .collectList()
+		                       .doOnDiscard(ByteBuf.class, ByteBuf::release)
+		                       .flatMap(list -> {
+		                           if (!list.isEmpty()) {
+		                               for (ByteBuf component : list) {
+		                                   if (component.isReadable()) {
+		                                       output.addComponent(true, component);
+		                                   }
+		                                   else {
+		                                       component.release();
+		                                   }
+		                               }
+		                           }
+		                           return output.isReadable() ? Mono.just(output) : Mono.empty();
+		                       })
+		                       .doFinally(signalType -> {
+		                           if (output.refCnt() > 0) {
+		                               output.release();
+		                           }
+		                       });
+		               })
+		           .as(ByteBufMono::maybeFuse);
 	}
 
 	/**
